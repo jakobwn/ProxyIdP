@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.git/
+.git/
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.user
+**/secrets.json
+**/Dockerfile*
+**/.dockerignore
