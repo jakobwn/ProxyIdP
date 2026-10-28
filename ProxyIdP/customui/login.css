@@ -1,0 +1,4 @@
+body.login-page{font-family:sans-serif;max-width:380px;margin:4em auto}
+.login-page input,.login-page button{width:100%;padding:.6em;margin:.3em 0;box-sizing:border-box}
+.login-error{color:#b00}
+.login-divider{margin:1.5em 0}

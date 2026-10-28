@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html class="login-html">
+<head>
+  <meta charset="utf-8">
+  <title>Sign in</title>
+  <link rel="stylesheet" href="/customui/login.css">
+</head>
+<body class="login-page">
+  <div class="login-container">
+    <h2 class="login-title">Sign in</h2>
+    <p class="login-error err" id="error" hidden></p>
+    <form class="login-form" id="form">
+      <label class="login-label">Email address<input class="login-input login-email" id="email" type="email" name="email" autocomplete="email" autofocus></label>
+      <button class="login-button login-button-primary" type="submit">Continue</button>
+      <hr class="login-divider">
+      <p class="login-alt-text">Or sign in with:</p>
+      <div id="idps"></div>
+    </form>
+  </div>
+  <script src="/customui/login.js"></script>
+</body>
+</html>
