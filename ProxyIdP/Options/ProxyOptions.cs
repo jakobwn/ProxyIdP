@@ -8,6 +8,18 @@ public class ProxyOptions
     public int TokenLifetimeMinutes { get; set; } = 30;
 }
 
+public class UiOptions
+{
+    public string StylePath { get; set; } = "style";
+    public CustomUiOptions CustomUi { get; set; } = new();
+}
+
+public class CustomUiOptions
+{
+    public bool Enabled { get; set; }
+    public string Path { get; set; } = "customui";
+}
+
 public class SigningKeyOptions
 {
     public int KeyLifetimeDays { get; set; } = 30;

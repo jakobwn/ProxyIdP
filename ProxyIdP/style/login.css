@@ -1,0 +1,30 @@
+body { 
+    background-color: lightslategray; 
+    color: darkslategray;
+}
+body.login-page {
+    font-family: monospace; 
+    max-width: 380px;
+    margin: 4em auto}
+.login-page input,.login-page button {
+    width: 100%;
+    padding: .6em;
+    margin:.3em 0;
+    box-sizing:border-box;
+    border-radius: 10px;
+}
+.login-button {
+    background-color: lightgray;
+    font-weight: bold;
+}
+.login-idp-button {
+    background-color: darkslategray;
+    color: white
+}
+.login-error { 
+    color: #b00
+}
+.login-divider { 
+    margin:1.5em 0
+}
+

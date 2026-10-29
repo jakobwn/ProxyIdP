@@ -23,6 +23,8 @@ public static class OidcEndpoints
         app.MapGet("/connect/authorize", Authorize);
         app.MapGet("/login", LoginGet);
         app.MapPost("/login", LoginPost);
+        app.MapGet("/api/login/config", ApiLoginConfig);
+        app.MapPost("/api/login", ApiLogin);
         app.MapGet("/signin-upstream", UpstreamCallback);
         app.MapPost("/connect/token", Token);
         app.MapMethods("/connect/userinfo", ["GET", "POST"], UserInfo);
@@ -92,23 +94,22 @@ public static class OidcEndpoints
     }
 
     private static string Page(string body) =>
-        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Sign in</title><style>" +
-        "body{font-family:sans-serif;max-width:380px;margin:4em auto}input,button{width:100%;padding:.6em;margin:.3em 0;box-sizing:border-box}" +
-        ".err{color:#b00}hr{margin:1.5em 0}</style></head><body>" + body + "</body></html>";
+        "<!DOCTYPE html><html class=\"login-html\"><head><meta charset=\"utf-8\"><title>Sign in</title>" +
+        "<link rel=\"stylesheet\" href=\"/style/login.css\"></head><body class=\"login-page\"><div class=\"login-container\">" + body + "</div></body></html>";
 
     private static Task<IResult> RenderLogin(HttpContext ctx, IAntiforgery af, UpstreamIdpRegistry reg, string rid, string? error)
     {
         var tokens = af.GetAndStoreTokens(ctx);
         Func<string?, string> enc = s => WebUtility.HtmlEncode(s);
-        var sb = new StringBuilder("<h2>Sign in</h2>");
-        if (error is not null) sb.Append($"<p class=\"err\">{enc(error)}</p>");
-        sb.Append("<form method=\"post\" action=\"/login\">")
-          .Append($"<input type=\"hidden\" name=\"{enc(tokens.FormFieldName)}\" value=\"{enc(tokens.RequestToken)}\">")
-          .Append($"<input type=\"hidden\" name=\"rid\" value=\"{enc(rid)}\">")
-          .Append("<label>Email address<input type=\"email\" name=\"email\" autocomplete=\"email\" autofocus></label>")
-          .Append("<button type=\"submit\">Continue</button><hr><p>Or sign in with:</p>");
+        var sb = new StringBuilder("<h2 class=\"login-title\">Sign in</h2>");
+        if (error is not null) sb.Append($"<p class=\"login-error err\">{enc(error)}</p>");
+        sb.Append("<form class=\"login-form\" method=\"post\" action=\"/login\">")
+          .Append($"<input class=\"login-hidden\" type=\"hidden\" name=\"{enc(tokens.FormFieldName)}\" value=\"{enc(tokens.RequestToken)}\">")
+          .Append($"<input class=\"login-hidden\" type=\"hidden\" name=\"rid\" value=\"{enc(rid)}\">")
+          .Append("<label class=\"login-label\">Email address<input class=\"login-input login-email\" type=\"email\" name=\"email\" autocomplete=\"email\" autofocus></label>")
+          .Append("<button class=\"login-button login-button-primary\" type=\"submit\">Continue</button><hr class=\"login-divider\"><p class=\"login-alt-text\">Or sign in with:</p>");
         foreach (var idp in reg.Enabled)
-            sb.Append($"<button type=\"submit\" name=\"idp\" value=\"{enc(idp.Id)}\" formnovalidate>{enc(idp.DisplayName)}</button>");
+            sb.Append($"<button class=\"login-button login-idp-button login-idp-{enc(idp.Id)}\" type=\"submit\" name=\"idp\" value=\"{enc(idp.Id)}\" formnovalidate>{enc(idp.DisplayName)}</button>");
         sb.Append("</form>");
         return Task.FromResult(Results.Content(Page(sb.ToString()), "text/html"));
     }
@@ -120,11 +121,68 @@ public static class OidcEndpoints
         return p is not null && p.ExpiresAt > time.GetUtcNow().UtcDateTime ? p : null;
     }
 
-    private static async Task<IResult> LoginGet(HttpContext ctx, ProxyIdPDbContext db, IAntiforgery af, UpstreamIdpRegistry reg, TimeProvider time)
+    private static async Task<IResult> LoginGet(HttpContext ctx, ProxyIdPDbContext db, IAntiforgery af, UpstreamIdpRegistry reg, TimeProvider time,
+        IOptions<UiOptions> ui, IHostEnvironment env)
     {
         var rid = ctx.Request.Query["rid"].ToString();
         if (await FindPending(db, rid, time) is null) return Results.BadRequest("Sign-in request expired or invalid.");
+        if (LoginUi.CustomIndexPath(env, ui.Value) is { } index)
+        {
+            ctx.Response.Headers.CacheControl = "no-store";
+            return Results.File(File.OpenRead(index), "text/html");
+        }
         return await RenderLogin(ctx, af, reg, rid, null);
+    }
+
+    private const string NoIdpMessage = "No identity provider matches that email address. Please choose one below.";
+
+    private static async Task<(string? Url, string? Error)> StartUpstream(ProxyIdPDbContext db, UpstreamIdpRegistry reg, IIdpResolver resolver,
+        IUpstreamIdpClient upstream, IOptions<ProxyOptions> opts, PendingAuthorization pending, string? selected, string email, CancellationToken ct)
+    {
+        var idp = !string.IsNullOrEmpty(selected) ? reg.Get(selected) : await resolver.ResolveAsync(email, ct) ?? reg.Default;
+        if (idp is null) return (null, NoIdpMessage);
+
+        if (!string.IsNullOrEmpty(email)) pending.LoginHint = email;
+        pending.IdpId = idp.Id;
+        pending.UpstreamState = Crypto.RandomToken();
+        pending.UpstreamNonce = Crypto.RandomToken();
+        pending.UpstreamCodeVerifier = Crypto.RandomToken(48);
+        await db.SaveChangesAsync(ct);
+
+        var redirect = $"{opts.Value.Issuer.TrimEnd('/')}/signin-upstream";
+        return (await upstream.BuildAuthorizeUrlAsync(idp, redirect, pending.UpstreamState, pending.UpstreamNonce, pending.UpstreamCodeVerifier, pending.LoginHint, ct), null);
+    }
+
+    private sealed record ApiLoginRequest(string? Rid, string? Email, string? Idp);
+
+    private static async Task<IResult> ApiLoginConfig(HttpContext ctx, ProxyIdPDbContext db, IAntiforgery af, UpstreamIdpRegistry reg, TimeProvider time,
+        IOptions<UiOptions> ui, IHostEnvironment env)
+    {
+        if (LoginUi.CustomIndexPath(env, ui.Value) is null) return Results.NotFound();
+        ctx.Response.Headers.CacheControl = "no-store";
+        var rid = ctx.Request.Query["rid"].ToString();
+        if (await FindPending(db, rid, time) is null) return Results.Json(new { error = "Sign-in request expired or invalid." }, statusCode: 400);
+        var t = af.GetAndStoreTokens(ctx);
+        return Results.Json(new
+        {
+            rid,
+            antiforgery = new { headerName = t.HeaderName, requestToken = t.RequestToken },
+            idps = reg.Enabled.Select(i => new { id = i.Id, displayName = i.DisplayName })
+        });
+    }
+
+    private static async Task<IResult> ApiLogin(HttpContext ctx, ProxyIdPDbContext db, IAntiforgery af, UpstreamIdpRegistry reg,
+        IIdpResolver resolver, IUpstreamIdpClient upstream, IOptions<ProxyOptions> opts, IOptions<UiOptions> ui, IHostEnvironment env,
+        TimeProvider time, ApiLoginRequest body, CancellationToken ct)
+    {
+        if (LoginUi.CustomIndexPath(env, ui.Value) is null) return Results.NotFound();
+        try { await af.ValidateRequestAsync(ctx); }
+        catch (AntiforgeryValidationException) { return Results.Json(new { error = "Invalid or missing antiforgery token." }, statusCode: 400); }
+        var pending = await FindPending(db, body.Rid, time);
+        if (pending is null) return Results.Json(new { error = "Sign-in request expired or invalid." }, statusCode: 400);
+
+        var (url, error) = await StartUpstream(db, reg, resolver, upstream, opts, pending, body.Idp, (body.Email ?? "").Trim(), ct);
+        return error is not null ? Results.Json(new { error }, statusCode: 400) : Results.Json(new { redirectUrl = url });
     }
 
     private static async Task<IResult> LoginPost(HttpContext ctx, ProxyIdPDbContext db, IAntiforgery af, UpstreamIdpRegistry reg,
@@ -139,20 +197,9 @@ public static class OidcEndpoints
 
         var selected = form["idp"].ToString();
         var email = form["email"].ToString().Trim();
-        var idp = !string.IsNullOrEmpty(selected) ? reg.Get(selected) : await resolver.ResolveAsync(email, ct) ?? reg.Default;
-        if (idp is null)
-            return await RenderLogin(ctx, af, reg, rid, "No identity provider matches that email address. Please choose one below.");
-
-        if (!string.IsNullOrEmpty(email)) pending.LoginHint = email;
-        pending.IdpId = idp.Id;
-        pending.UpstreamState = Crypto.RandomToken();
-        pending.UpstreamNonce = Crypto.RandomToken();
-        pending.UpstreamCodeVerifier = Crypto.RandomToken(48);
-        await db.SaveChangesAsync(ct);
-
-        var redirect = $"{opts.Value.Issuer.TrimEnd('/')}/signin-upstream";
-        var url = await upstream.BuildAuthorizeUrlAsync(idp, redirect, pending.UpstreamState, pending.UpstreamNonce, pending.UpstreamCodeVerifier, pending.LoginHint, ct);
-        return Results.Redirect(url);
+        var (url, error) = await StartUpstream(db, reg, resolver, upstream, opts, pending, selected, email, ct);
+        if (error is not null) return await RenderLogin(ctx, af, reg, rid, error);
+        return Results.Redirect(url!);
     }
 
     private static async Task<IResult> UpstreamCallback(HttpContext ctx, ProxyIdPDbContext db, UpstreamIdpRegistry reg, IUpstreamIdpClient upstream,

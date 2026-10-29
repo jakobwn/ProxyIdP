@@ -27,7 +27,12 @@ ENV ASPNETCORE_URLS=http://+:8080 \
 	ConnectionStrings__Default="Data Source=/data/proxyidp.db" \
 	DataProtection__KeyPath=/data/keys \
 	Hosting__UseHttpsRedirection=false \
-	ForwardedHeaders__Enabled=false
+	ForwardedHeaders__Enabled=false \
+	Ui__StylePath=/app/style \
+	Ui__CustomUi__Enabled=false \
+	Ui__CustomUi__Path=/app/customui
 
 VOLUME /data
+VOLUME /app/style
+VOLUME /app/customui
 ENTRYPOINT ["dotnet", "ProxyIdP.dll"]

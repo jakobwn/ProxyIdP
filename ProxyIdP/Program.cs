@@ -28,6 +28,7 @@ namespace ProxyIdP
 			}
 
 			builder.Services.Configure<ProxyOptions>(config.GetSection("Proxy"));
+			builder.Services.Configure<UiOptions>(config.GetSection("Ui"));
 			builder.Services.Configure<SigningKeyOptions>(config.GetSection("SigningKeys"));
 			builder.Services.Configure<IdpResolverOptions>(config.GetSection("IdpResolver"));
 			builder.Services.AddSingleton(new UpstreamIdpRegistry(
@@ -38,7 +39,7 @@ namespace ProxyIdP
 			var dp = builder.Services.AddDataProtection().SetApplicationName("ProxyIdP");
 			if (!string.IsNullOrWhiteSpace(config["DataProtection:KeyPath"]))
 				dp.PersistKeysToFileSystem(new DirectoryInfo(config["DataProtection:KeyPath"]!));
-			builder.Services.AddAntiforgery();
+			builder.Services.AddAntiforgery(o => o.HeaderName = "X-CSRF-TOKEN");
 			builder.Services.AddHttpClient();
 			builder.Services.AddHttpClient(IdpResolver.HttpClientName);
 			builder.Services.AddSingleton<IIdpResolver, IdpResolver>();
@@ -62,6 +63,7 @@ namespace ProxyIdP
 			if (config.GetValue<bool>("ForwardedHeaders:Enabled")) app.UseForwardedHeaders();
 			if (config.GetValue("Hosting:UseHttpsRedirection", true)) app.UseHttpsRedirection();
 			app.UseAntiforgery();
+			app.UseLoginUiFiles();
 			app.MapOidc();
 			app.MapGet("/healthz", async (ProxyIdPDbContext db, CancellationToken ct) =>
 				await db.Database.CanConnectAsync(ct) ? Results.Ok("Healthy") : Results.StatusCode(StatusCodes.Status503ServiceUnavailable));

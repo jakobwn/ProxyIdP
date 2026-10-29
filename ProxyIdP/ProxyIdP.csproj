@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -8,6 +8,10 @@
     <DockerfileContext>..</DockerfileContext>
     <UserSecretsId>7c1e5b3a-4d2f-4a8e-9b6c-3f0d2e8a1c57</UserSecretsId>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="style\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.14" />
