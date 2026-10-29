@@ -5,6 +5,20 @@
 - **login_hint**: when the user enters an email on the login page, that email is forwarded to the upstream IdP as `login_hint`, so it does not have to be typed twice. A `login_hint` sent by the client to `/connect/authorize` is used when no email was typed. Choosing an IdP button without an email sends no hint.
 - **Default IdP**: set `"IsDefault": true` on one enabled entry in `UpstreamIdps`. It is used when no IdP button was chosen and the email did not match an IdP (by `EmailDomains` or the optional resolver API), including an empty email. Without a default, the login page shows an error and asks the user to choose. At most one IdP may be the default and it must be enabled; otherwise startup fails.
 
+## Configuring upstream IdPs
+
+`UpstreamIdps` is an object of named nodes; the node name is the IdP id (no `Id` property). Any new name adds an IdP. Individual values can be overridden with environment variables, e.g. `UpstreamIdps__workforce__ClientId=...`. The old array form (`UpstreamIdps__0__...`) is no longer supported and fails at startup.
+
+The list can also live in an optional file, `/config/customconfig.json` (e.g. a mounted config volume). It can hold any configuration section, including `UpstreamIdps` and `Clients`: `{ "UpstreamIdps": { "workforce": { ... } }, "Clients": { ... } }`. Precedence: appsettings < `/config/customconfig.json` < environment variables < command line. This file replaces the earlier `/config/upstreamidps.json`; rename existing files.
+
+The base `appsettings.json` defines no IdPs; `appsettings.Development.json` defines sample ones. For a ready-made image see [examples/upstream](../examples/upstream/README.md), and for a full explanation of the IdP types and properties see [CONFIGURING-IDPS.md](../examples/upstream/CONFIGURING-IDPS.md).
+
+## Configuring clients
+
+`Clients` is an object of named nodes; the node name is the client id. Each entry supports `Secret` (optional, stored hashed), `RedirectUris`, `PostLogoutRedirectUris` and `AllowedScopes` (defaults to `openid profile email`). At least one redirect URI is required. Single values can be overridden with environment variables, e.g. `Clients__dev-client__Secret=...`. The array form is rejected at startup.
+
+On startup every configured client is upserted (created, or updated to match the configuration). Clients that exist in the database but not in the configuration are left untouched. The base `appsettings.json` defines no clients; `appsettings.Development.json` defines `dev-client`.
+
 ## Login page customization
 
 ### Stylesheet
