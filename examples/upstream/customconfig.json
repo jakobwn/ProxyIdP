@@ -9,6 +9,7 @@
     "workforce": {
       "Type": "EntraWorkforce",
       "DisplayName": "LEGO (Entra)",
+      "SortOrder": 10,
       "Enabled": true,
       "IsDefault": false,
       "TenantId": "1d063515-6cad-4195-9486-ea65df456faa",
@@ -19,6 +20,7 @@
     "customers": {
       "Type": "EntraExternalId",
       "DisplayName": "Customers (Entra External ID)",
+      "SortOrder": 20,
       "Enabled": true,
       "IsDefault": true,
       "TenantSubdomain": "legogroupextdev",
@@ -30,6 +32,7 @@
     "OIDC-IdP": {
       "Type": "GenericOidc",
       "DisplayName": "Generic Partner (OIDC)",
+      "SortOrder": 30,
       "Enabled": false,
       "IsDefault": false,
       "Authority": "https://idp.partner.example",

@@ -23,7 +23,7 @@ public sealed class UpstreamIdpRegistry
 
     public UpstreamIdpRegistry(IEnumerable<UpstreamIdpOptions> idps)
     {
-        _idps = idps.ToList();
+        _idps = idps.OrderBy(i => i.SortOrder).ToList();
         var errors = _idps.SelectMany(i => i.Validate()).ToList();
         errors.AddRange(_idps.GroupBy(i => i.Id, StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Count() > 1)

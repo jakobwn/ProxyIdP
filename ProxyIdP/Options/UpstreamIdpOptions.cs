@@ -13,6 +13,8 @@ public class UpstreamIdpOptions
     public UpstreamIdpType Type { get; set; }
     public string DisplayName { get; set; } = "";
     public bool Enabled { get; set; } = true;
+    // Display order; lower values first. Ties keep configuration order.
+    public int SortOrder { get; set; }
     // Used when the email did not resolve to an IdP and no IdP was chosen explicitly.
     public bool IsDefault { get; set; }
     public string ClientId { get; set; } = "";

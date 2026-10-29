@@ -80,6 +80,28 @@ public class UpstreamIdpTests
     }
 
     [Fact]
+    public void Enabled_IsOrderedBySortOrder_ThenKeepsInputOrder()
+    {
+        var reg = new UpstreamIdpRegistry([
+            Idp("c", UpstreamIdpType.GenericOidc, o => { o.Authority = "https://c"; o.SortOrder = 20; }),
+            Idp("z", UpstreamIdpType.GenericOidc, o => o.Authority = "https://z"),
+            Idp("a", UpstreamIdpType.GenericOidc, o => { o.Authority = "https://a"; o.SortOrder = 10; }),
+            Idp("y", UpstreamIdpType.GenericOidc, o => o.Authority = "https://y")]);
+        Assert.Equal(["z", "y", "a", "c"], reg.Enabled.Select(i => i.Id));
+    }
+
+    [Fact]
+    public void FromConfiguration_BindsSortOrder()
+    {
+        var reg = UpstreamIdpRegistry.FromConfiguration(Config(new Dictionary<string, string?>
+        {
+            ["UpstreamIdps:first:Type"] = "GenericOidc", ["UpstreamIdps:first:DisplayName"] = "First", ["UpstreamIdps:first:ClientId"] = "c", ["UpstreamIdps:first:Authority"] = "https://f.example", ["UpstreamIdps:first:SortOrder"] = "2",
+            ["UpstreamIdps:second:Type"] = "GenericOidc", ["UpstreamIdps:second:DisplayName"] = "Second", ["UpstreamIdps:second:ClientId"] = "c", ["UpstreamIdps:second:Authority"] = "https://s.example", ["UpstreamIdps:second:SortOrder"] = "1"
+        }));
+        Assert.Equal(["second", "first"], reg.Enabled.Select(i => i.Id));
+    }
+
+    [Fact]
     public void FromConfiguration_RejectsLegacyArray() =>
         Assert.Throws<InvalidOperationException>(() => UpstreamIdpRegistry.FromConfiguration(Config(
             new Dictionary<string, string?> { ["UpstreamIdps:0:Id"] = "a", ["UpstreamIdps:0:Type"] = "GenericOidc" })));

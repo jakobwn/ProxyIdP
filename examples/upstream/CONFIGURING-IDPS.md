@@ -22,6 +22,7 @@ The file is read from `/config/customconfig.json` (typically a mounted config vo
 
 - The **node name is the IdP id** (`workforce` above). There is no `Id` property. It may only contain letters, digits, `-` and `_`, and must be unique (case-insensitive). It is used internally, in the login page button class (`login-idp-<id>`) and in the `idp` claim of issued tokens.
 - Any new node adds an IdP, so the list is dynamic.
+- Optional `SortOrder` (integer, lowest first, default 0) controls the order of the IdPs; ties keep configuration order.
 - The old array form (`"UpstreamIdps": [ ... ]`, or `UpstreamIdps__0__...` environment variables) is rejected at startup.
 - A configuration error stops startup with a list of every problem found.
 
