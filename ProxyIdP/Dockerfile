@@ -33,6 +33,7 @@ ENV ASPNETCORE_URLS=http://+:8080 \
 	Ui__CustomUi__Path=/app/customui
 
 VOLUME /data
+VOLUME /config
 VOLUME /app/style
 VOLUME /app/customui
 ENTRYPOINT ["dotnet", "ProxyIdP.dll"]

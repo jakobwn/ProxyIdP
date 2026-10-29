@@ -11,6 +11,8 @@
 
 The list can also live in an optional file, `/config/customconfig.json` (e.g. a mounted config volume). It can hold any configuration section, including `UpstreamIdps` and `Clients`: `{ "UpstreamIdps": { "workforce": { ... } }, "Clients": { ... } }`. Precedence: appsettings < `/config/customconfig.json` < environment variables < command line. This file replaces the earlier `/config/upstreamidps.json`; rename existing files.
 
+The base `appsettings.json` defines no IdPs; `appsettings.Development.json` defines sample ones. For a ready-made image see [examples/upstream](../examples/upstream/README.md), and for a full explanation of the IdP types and properties see [CONFIGURING-IDPS.md](../examples/upstream/CONFIGURING-IDPS.md).
+
 ## Configuring clients
 
 `Clients` is an object of named nodes; the node name is the client id. Each entry supports `Secret` (optional, stored hashed), `RedirectUris`, `PostLogoutRedirectUris` and `AllowedScopes` (defaults to `openid profile email`). At least one redirect URI is required. Single values can be overridden with environment variables, e.g. `Clients__dev-client__Secret=...`. The array form is rejected at startup.
