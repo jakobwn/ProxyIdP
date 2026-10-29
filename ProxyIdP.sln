@@ -1,13 +1,15 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.14.37411.7
+# Visual Studio Version 18
+VisualStudioVersion = 18.10.12217.157 stable
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProxyIdP", "ProxyIdP\ProxyIdP.csproj", "{57B09752-E679-4E15-8DE0-70AC9CE6F871}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProxyIdP.Tests", "ProxyIdP.Tests\ProxyIdP.Tests.csproj", "{06A9C332-49ED-4218-B595-B7EF78A7EBCA}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProxyIdP.SampleApp", "ProxyIdP.SampleApp\ProxyIdP.SampleApp.csproj", "{4689676C-D783-4247-9069-9F4D565CE944}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProxyIdP.SampleApp", "local-development\ProxyIdP.SampleApp\ProxyIdP.SampleApp.csproj", "{4689676C-D783-4247-9069-9F4D565CE944}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Local-Development", "Local-Development", "{13B039D0-A777-451F-A258-30889071192B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -58,6 +60,9 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{4689676C-D783-4247-9069-9F4D565CE944} = {13B039D0-A777-451F-A258-30889071192B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {501C24A6-93A7-42FF-89A2-F9379928DEB2}
