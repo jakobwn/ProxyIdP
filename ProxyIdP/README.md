@@ -38,6 +38,3 @@ The custom UI uses these same-origin JSON endpoints (404 when the custom UI is d
 
 is in `examples/customui` (`index.html`, `login.js`, `login.css`), together with a Dockerfile that extends the ProxyIdP image.
 
-## Database note
-
-The schema is created with `EnsureCreated`, which does not alter existing tables. The `PendingAuthorizations` table gained a `LoginHint` column, so delete an existing `proxyidp.db` (or add the column manually) after upgrading.
