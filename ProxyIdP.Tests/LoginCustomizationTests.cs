@@ -17,8 +17,16 @@ public sealed class CustomUiFactory : WebApplicationFactory<Program>
         {
             ["ConnectionStrings:Default"] = $"Data Source={_db}",
             ["Proxy:Issuer"] = "https://proxy.test",
-            ["Ui:CustomUi:Enabled"] = "true"
+            ["Ui:CustomUi:Enabled"] = "true",
+            ["Ui:CustomUi:Path"] = FindExampleUiPath()
         }));
+    }
+
+    private static string FindExampleUiPath()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "ProxyIdP.sln"))) dir = dir.Parent;
+        return Path.Combine(dir!.FullName, "examples", "customui", "customui");
     }
 
     protected override void Dispose(bool disposing)

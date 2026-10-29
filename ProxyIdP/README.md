@@ -36,7 +36,7 @@ The custom UI uses these same-origin JSON endpoints (404 when the custom UI is d
 - `GET /api/login/config?rid=<rid>` returns `{ "rid", "antiforgery": { "headerName", "requestToken" }, "idps": [ { "id", "displayName" } ] }` and sets the antiforgery cookie. Returns 400 `{ "error" }` if the `rid` is expired or invalid.
 - `POST /api/login` with JSON `{ "rid", "email", "idp" }` and the antiforgery token in the `X-CSRF-TOKEN` header. Returns `{ "redirectUrl" }` (navigate the browser there) or 400 `{ "error" }`. Provider selection is the same as the default page: an explicit `idp`, else email domain/resolver match, else the default IdP.
 
-A sample that looks exactly like the default page is in `ProxyIdP/customui` (`index.html`, `login.js`, `login.css`).
+is in `examples/customui` (`index.html`, `login.js`, `login.css`), together with a Dockerfile that extends the ProxyIdP image.
 
 ## Database note
 
