@@ -4,6 +4,23 @@ public sealed class UpstreamIdpRegistry
 {
     private readonly List<UpstreamIdpOptions> _idps;
 
+    public static UpstreamIdpRegistry FromConfiguration(Microsoft.Extensions.Configuration.IConfiguration config)
+    {
+        var nodes = config.GetSection("UpstreamIdps").GetChildren().ToList();
+        var legacy = nodes.Where(n => int.TryParse(n.Key, out _)).Select(n => n.Key).ToList();
+        if (legacy.Count > 0)
+            throw new InvalidOperationException("Invalid UpstreamIdps configuration: UpstreamIdps must be an object keyed by IdP id, not an array (found numeric keys: " + string.Join(", ", legacy) + ").");
+
+        var idps = new List<UpstreamIdpOptions>();
+        foreach (var node in nodes)
+        {
+            var idp = node.Get<UpstreamIdpOptions>() ?? new UpstreamIdpOptions();
+            idp.Id = node.Key;
+            idps.Add(idp);
+        }
+        return new UpstreamIdpRegistry(idps);
+    }
+
     public UpstreamIdpRegistry(IEnumerable<UpstreamIdpOptions> idps)
     {
         _idps = idps.ToList();

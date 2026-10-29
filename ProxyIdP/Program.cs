@@ -13,7 +13,11 @@ namespace ProxyIdP
 		public static async Task Main(string[] args)
 		{
 			var builder = WebApplication.CreateBuilder(args);
-			var config = builder.Configuration;
+						builder.Configuration.AddJsonFile(ConfigPaths.CustomConfig, optional: true, reloadOnChange: false);
+						builder.Configuration.AddEnvironmentVariables();
+						if (args.Length > 0) builder.Configuration.AddCommandLine(args);
+						var config = builder.Configuration;
+						var clients = ClientOptions.FromConfiguration(config);
 
 			EnsureDataDirectories(config);
 
@@ -31,8 +35,7 @@ namespace ProxyIdP
 			builder.Services.Configure<UiOptions>(config.GetSection("Ui"));
 			builder.Services.Configure<SigningKeyOptions>(config.GetSection("SigningKeys"));
 			builder.Services.Configure<IdpResolverOptions>(config.GetSection("IdpResolver"));
-			builder.Services.AddSingleton(new UpstreamIdpRegistry(
-				config.GetSection("UpstreamIdps").Get<List<UpstreamIdpOptions>>() ?? []));
+			builder.Services.AddSingleton(UpstreamIdpRegistry.FromConfiguration(config));
 
 			builder.Services.AddSingleton(TimeProvider.System);
 			builder.Services.AddDbContext<ProxyIdPDbContext>(o => o.UseSqlite(config.GetConnectionString("Default")));
@@ -56,7 +59,7 @@ namespace ProxyIdP
 			{
 				var db = scope.ServiceProvider.GetRequiredService<ProxyIdPDbContext>();
 				await db.Database.EnsureCreatedAsync();
-				if (app.Environment.IsDevelopment()) await SeedDevClientAsync(db);
+				await SeedClientsAsync(db, clients);
 			}
 			await app.Services.GetRequiredService<ISigningKeyStore>().EnsureKeysAsync();
 
@@ -85,16 +88,21 @@ namespace ProxyIdP
 			if (!string.IsNullOrWhiteSpace(keyPath)) Directory.CreateDirectory(keyPath);
 		}
 
-		private static async Task SeedDevClientAsync(ProxyIdPDbContext db)
+		public static async Task SeedClientsAsync(ProxyIdPDbContext db, IEnumerable<ClientOptions> configured)
 		{
-			if (await db.Clients.AnyAsync(c => c.ClientId == "dev-client")) return;
-			db.Clients.Add(new Client
+			foreach (var opt in configured)
 			{
-				ClientId = "dev-client",
-				SecretHash = null,
-				RedirectUris = ["https://localhost:5001/signin-oidc", "https://oauth.pstmn.io/v1/callback"],
-				PostLogoutRedirectUris = ["https://localhost:5001/signout-callback-oidc"]
-			});
+				var client = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == opt.ClientId);
+				if (client is null)
+				{
+					client = new Client { ClientId = opt.ClientId };
+					db.Clients.Add(client);
+				}
+				client.SecretHash = string.IsNullOrEmpty(opt.Secret) ? null : Crypto.Sha256(opt.Secret);
+				client.RedirectUris = [.. opt.RedirectUris];
+				client.PostLogoutRedirectUris = [.. opt.PostLogoutRedirectUris];
+				client.AllowedScopes = opt.AllowedScopes.Count > 0 ? [.. opt.AllowedScopes] : [.. ClientOptions.DefaultScopes];
+			}
 			await db.SaveChangesAsync();
 		}
 	}

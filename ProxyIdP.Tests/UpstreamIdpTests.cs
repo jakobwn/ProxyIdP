@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using ProxyIdP.Options;
 
 namespace ProxyIdP.Tests;
@@ -58,4 +59,28 @@ public class UpstreamIdpTests
         Assert.Equal("b", reg.Get("a") is null ? null : "b");
         Assert.Null(reg.Get("b"));
     }
+
+    private static IConfiguration Config(params Dictionary<string, string?>[] layers)
+    {
+        var b = new ConfigurationBuilder();
+        foreach (var l in layers) b.AddInMemoryCollection(l);
+        return b.Build();
+    }
+
+    [Fact]
+    public void FromConfiguration_UsesKeyAsId_AndLaterLayerOverridesSingleValue()
+    {
+        var reg = UpstreamIdpRegistry.FromConfiguration(Config(
+            new Dictionary<string, string?> { ["UpstreamIdps:acme:Type"] = "GenericOidc", ["UpstreamIdps:acme:DisplayName"] = "Acme",
+                    ["UpstreamIdps:acme:ClientId"] = "old", ["UpstreamIdps:acme:Authority"] = "https://acme.example" },
+            new Dictionary<string, string?> { ["UpstreamIdps:acme:ClientId"] = "new" }));
+        var idp = Assert.Single(reg.Enabled);
+        Assert.Equal("acme", idp.Id);
+        Assert.Equal("new", idp.ClientId);
+    }
+
+    [Fact]
+    public void FromConfiguration_RejectsLegacyArray() =>
+        Assert.Throws<InvalidOperationException>(() => UpstreamIdpRegistry.FromConfiguration(Config(
+            new Dictionary<string, string?> { ["UpstreamIdps:0:Id"] = "a", ["UpstreamIdps:0:Type"] = "GenericOidc" })));
 }
