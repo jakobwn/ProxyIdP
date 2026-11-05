@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	<TargetFramework>net10.0</TargetFramework>
+	<Nullable>enable</Nullable>
+	<ImplicitUsings>enable</ImplicitUsings>
+	<EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+	<ProjectReference Include="..\..\ProxyIdP.Plugins.Abstractions\ProxyIdP.Plugins.Abstractions.csproj">
+	  <Private>false</Private>
+	  <ExcludeAssets>runtime</ExcludeAssets>
+	</ProjectReference>
+	<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0">
+	  <ExcludeAssets>runtime</ExcludeAssets>
+	  <Private>false</Private>
+	</PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+	<Content Include="appsettings*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Development only: drop the built plugin into the host's plugin folder so it is loaded at runtime. -->
+  <Target Name="CopyPluginToHost" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug'">
+	<PropertyGroup>
+	  <HostPluginDir>$(MSBuildThisFileDirectory)..\..\ProxyIdP\plugins\ExamplePlugin\</HostPluginDir>
+	</PropertyGroup>
+	<ItemGroup>
+	  <PluginFile Include="$(OutDir)$(TargetName).dll;$(OutDir)$(TargetName).pdb;$(OutDir)$(TargetName).deps.json;$(OutDir)appsettings*.json" />
+	</ItemGroup>
+	<Copy SourceFiles="@(PluginFile)" DestinationFolder="$(HostPluginDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

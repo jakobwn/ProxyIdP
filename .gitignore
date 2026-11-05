@@ -364,3 +364,5 @@ FodyWeavers.xsd
 ProxyIdP/proxyidp.db
 ProxyIdP/proxyidp.db-shm
 ProxyIdP/proxyidp.db-wal
+
+ProxyIdP/plugins/

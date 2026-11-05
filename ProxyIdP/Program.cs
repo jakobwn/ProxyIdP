@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using ProxyIdP.Data;
 using ProxyIdP.Endpoints;
 using ProxyIdP.Options;
+using ProxyIdP.Plugins;
 using ProxyIdP.Services;
 
 namespace ProxyIdP
@@ -13,7 +14,7 @@ namespace ProxyIdP
 		public static async Task Main(string[] args)
 		{
 			var builder = WebApplication.CreateBuilder(args);
-						builder.Configuration.AddJsonFile(ConfigPaths.CustomConfig, optional: true, reloadOnChange: false);
+						builder.Configuration.AddJsonFile(ConfigPaths.CustomConfig, optional: true, reloadOnChange: true);
 						builder.Configuration.AddEnvironmentVariables();
 						if (args.Length > 0) builder.Configuration.AddCommandLine(args);
 						var config = builder.Configuration;
@@ -31,6 +32,9 @@ namespace ProxyIdP
 				});
 			}
 
+			var resolverError = config.GetSection("IdpResolver").Get<IdpResolverOptions>()?.Validate(builder.Environment.IsDevelopment());
+			if (resolverError is not null) throw new InvalidOperationException(resolverError);
+
 			builder.Services.Configure<ProxyOptions>(config.GetSection("Proxy"));
 			builder.Services.Configure<UiOptions>(config.GetSection("Ui"));
 			builder.Services.Configure<SigningKeyOptions>(config.GetSection("SigningKeys"));
@@ -45,7 +49,14 @@ namespace ProxyIdP
 			builder.Services.AddAntiforgery(o => o.HeaderName = "X-CSRF-TOKEN");
 			builder.Services.AddHttpClient();
 			builder.Services.AddHttpClient(IdpResolver.HttpClientName);
+			builder.Services.AddSingleton<IResolverTokenProvider, ResolverTokenProvider>();
 			builder.Services.AddSingleton<IIdpResolver, IdpResolver>();
+
+			builder.Services.Configure<PluginOptions>(config.GetSection("Plugins"));
+			builder.Services.AddSingleton<IPluginIdentityIssuer, PluginIdentityIssuer>();
+			builder.Services.AddSingleton<PluginHost>();
+			builder.Services.AddSingleton<IPluginHost>(sp => sp.GetRequiredService<PluginHost>());
+			builder.Services.AddHostedService(sp => sp.GetRequiredService<PluginHost>());
 
 			builder.Services.AddSingleton<ISigningKeyStore, SigningKeyStore>();
 			builder.Services.AddSingleton<IUpstreamIdpClient, UpstreamIdpClient>();
