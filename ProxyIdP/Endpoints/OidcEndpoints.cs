@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using ProxyIdP.Data;
 using ProxyIdP.Options;
+using ProxyIdP.Plugins;
 using ProxyIdP.Services;
 
 namespace ProxyIdP.Endpoints;
@@ -54,7 +55,7 @@ public static class OidcEndpoints
         });
     }
 
-    private static async Task<IResult> Authorize(HttpContext ctx, ProxyIdPDbContext db, IOptions<ProxyOptions> opts, TimeProvider time)
+    private static async Task<IResult> Authorize(HttpContext ctx, ProxyIdPDbContext db, IOptions<ProxyOptions> opts, TimeProvider time, IPluginHost plugins, CancellationToken ct)
     {
         var q = ctx.Request.Query;
         var clientId = q["client_id"].ToString();
@@ -76,6 +77,10 @@ public static class OidcEndpoints
         if (string.IsNullOrEmpty(challenge) || q["code_challenge_method"] != "S256")
             return Error("invalid_request", "PKCE with code_challenge_method=S256 is required.");
 
+        var hookCtx = new AuthorizationRequestContext(clientId, redirectUri, scopes, string.IsNullOrWhiteSpace(q["login_hint"]) ? null : q["login_hint"].ToString().Trim());
+        await plugins.AuthorizationRequestAsync(hookCtx, ct);
+        if (hookCtx.IsRejected) return Error(hookCtx.Error ?? "access_denied", hookCtx.ErrorDescription ?? "Request rejected.");
+
         var pending = new PendingAuthorization
         {
             Id = Crypto.RandomToken(),
@@ -84,7 +89,7 @@ public static class OidcEndpoints
             Scope = string.Join(' ', scopes),
             State = state,
             Nonce = q["nonce"],
-            LoginHint = string.IsNullOrWhiteSpace(q["login_hint"]) ? null : q["login_hint"].ToString().Trim(),
+            LoginHint = hookCtx.LoginHint,
             CodeChallenge = challenge,
             ExpiresAt = time.GetUtcNow().UtcDateTime.AddMinutes(opts.Value.PendingAuthorizationLifetimeMinutes)
         };
@@ -137,7 +142,7 @@ public static class OidcEndpoints
     private const string NoIdpMessage = "No identity provider matches that email address. Please choose one below.";
 
     private static async Task<(string? Url, string? Error)> StartUpstream(ProxyIdPDbContext db, UpstreamIdpRegistry reg, IIdpResolver resolver,
-        IUpstreamIdpClient upstream, IOptions<ProxyOptions> opts, PendingAuthorization pending, string? selected, string email, CancellationToken ct)
+        IUpstreamIdpClient upstream, IOptions<ProxyOptions> opts, IPluginHost plugins, PendingAuthorization pending, string? selected, string email, CancellationToken ct)
     {
         var idp = !string.IsNullOrEmpty(selected) ? reg.Get(selected) : await resolver.ResolveAsync(email, ct) ?? reg.Default;
         if (idp is null) return (null, NoIdpMessage);
@@ -150,7 +155,10 @@ public static class OidcEndpoints
         await db.SaveChangesAsync(ct);
 
         var redirect = $"{opts.Value.Issuer.TrimEnd('/')}/signin-upstream";
-        return (await upstream.BuildAuthorizeUrlAsync(idp, redirect, pending.UpstreamState, pending.UpstreamNonce, pending.UpstreamCodeVerifier, pending.LoginHint, ct), null);
+        var url = await upstream.BuildAuthorizeUrlAsync(idp, redirect, pending.UpstreamState, pending.UpstreamNonce, pending.UpstreamCodeVerifier, pending.LoginHint, ct);
+        var hookCtx = new UpstreamRedirectContext(pending.ClientId, idp.Id, string.IsNullOrEmpty(email) ? null : email, url);
+        await plugins.UpstreamRedirectAsync(hookCtx, ct);
+        return (hookCtx.AuthorizeUrl, null);
     }
 
     private sealed record ApiLoginRequest(string? Rid, string? Email, string? Idp);
@@ -173,7 +181,7 @@ public static class OidcEndpoints
 
     private static async Task<IResult> ApiLogin(HttpContext ctx, ProxyIdPDbContext db, IAntiforgery af, UpstreamIdpRegistry reg,
         IIdpResolver resolver, IUpstreamIdpClient upstream, IOptions<ProxyOptions> opts, IOptions<UiOptions> ui, IHostEnvironment env,
-        TimeProvider time, ApiLoginRequest body, CancellationToken ct)
+        TimeProvider time, IPluginHost plugins, ApiLoginRequest body, CancellationToken ct)
     {
         if (LoginUi.CustomIndexPath(env, ui.Value) is null) return Results.NotFound();
         try { await af.ValidateRequestAsync(ctx); }
@@ -181,12 +189,12 @@ public static class OidcEndpoints
         var pending = await FindPending(db, body.Rid, time);
         if (pending is null) return Results.Json(new { error = "Sign-in request expired or invalid." }, statusCode: 400);
 
-        var (url, error) = await StartUpstream(db, reg, resolver, upstream, opts, pending, body.Idp, (body.Email ?? "").Trim(), ct);
+        var (url, error) = await StartUpstream(db, reg, resolver, upstream, opts, plugins, pending, body.Idp, (body.Email ?? "").Trim(), ct);
         return error is not null ? Results.Json(new { error }, statusCode: 400) : Results.Json(new { redirectUrl = url });
     }
 
     private static async Task<IResult> LoginPost(HttpContext ctx, ProxyIdPDbContext db, IAntiforgery af, UpstreamIdpRegistry reg,
-        IIdpResolver resolver, IUpstreamIdpClient upstream, IOptions<ProxyOptions> opts, TimeProvider time, CancellationToken ct)
+        IIdpResolver resolver, IUpstreamIdpClient upstream, IOptions<ProxyOptions> opts, TimeProvider time, IPluginHost plugins, CancellationToken ct)
     {
         try { await af.ValidateRequestAsync(ctx); }
         catch (AntiforgeryValidationException) { return Results.BadRequest("Invalid or missing antiforgery token."); }
@@ -197,13 +205,13 @@ public static class OidcEndpoints
 
         var selected = form["idp"].ToString();
         var email = form["email"].ToString().Trim();
-        var (url, error) = await StartUpstream(db, reg, resolver, upstream, opts, pending, selected, email, ct);
+        var (url, error) = await StartUpstream(db, reg, resolver, upstream, opts, plugins, pending, selected, email, ct);
         if (error is not null) return await RenderLogin(ctx, af, reg, rid, error);
         return Results.Redirect(url!);
     }
 
     private static async Task<IResult> UpstreamCallback(HttpContext ctx, ProxyIdPDbContext db, UpstreamIdpRegistry reg, IUpstreamIdpClient upstream,
-        IOptions<ProxyOptions> opts, TimeProvider time, ILogger<Program> logger, CancellationToken ct)
+        IOptions<ProxyOptions> opts, TimeProvider time, IPluginHost plugins, ILogger<Program> logger, CancellationToken ct)
     {
         var state = ctx.Request.Query["state"].ToString();
         var pending = string.IsNullOrEmpty(state) ? null
@@ -235,8 +243,15 @@ public static class OidcEndpoints
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Upstream sign-in via {Idp} failed", idp.Id);
+            await plugins.ErrorAsync(new ErrorContext(pending.ClientId, "upstream-callback", ex), ct);
             return Results.Redirect(Back("access_denied", "Upstream authentication failed."));
         }
+
+        var upstreamClaims = result.Claims.Select(c => new Claim(c.Key, c.Value)).ToList();
+        var callbackCtx = new UpstreamCallbackContext(pending.ClientId, idp.Id, result.Subject, upstreamClaims);
+        await plugins.UpstreamCallbackAsync(callbackCtx, ct);
+        if (callbackCtx.IsRejected) return Results.Redirect(Back(callbackCtx.Error ?? "access_denied", callbackCtx.ErrorDescription));
+        result = result with { Claims = [.. upstreamClaims.Select(c => new KeyValuePair<string, string>(c.Type, c.Value))] };
 
         var proxyCode = Crypto.RandomToken();
         db.Grants.Add(new AuthorizationGrant
@@ -262,7 +277,7 @@ public static class OidcEndpoints
     private static IResult TokenError(string error, string? desc = null, int status = 400) =>
         Results.Json(new { error, error_description = desc }, statusCode: status);
 
-    private static async Task<IResult> Token(HttpContext ctx, ProxyIdPDbContext db, TokenService tokens, TimeProvider time, CancellationToken ct)
+    private static async Task<IResult> Token(HttpContext ctx, ProxyIdPDbContext db, TokenService tokens, TimeProvider time, IPluginHost plugins, CancellationToken ct)
     {
         ctx.Response.Headers.CacheControl = "no-store";
         if (!ctx.Request.HasFormContentType) return TokenError("invalid_request");
@@ -307,8 +322,11 @@ public static class OidcEndpoints
         var claims = new List<Claim> { new("sub", grant.Subject) };
         claims.AddRange(pairs.Select(p => new Claim(p[0], p[1])));
 
+        await plugins.TokenIssuingAsync(new TokenIssuingContext(client.ClientId, grant.Subject, grant.Scope, claims), ct);
+
         var idToken = await tokens.CreateIdTokenAsync(client.ClientId, claims, grant.Nonce, ct);
         var accessToken = await tokens.CreateAccessTokenAsync(client.ClientId, claims, grant.Scope, ct);
+        await plugins.TokenIssuedAsync(new TokenIssuedContext(client.ClientId, grant.Subject, grant.Scope, claims), ct);
         return Results.Json(new
         {
             access_token = accessToken,

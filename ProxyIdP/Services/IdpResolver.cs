@@ -15,7 +15,8 @@ public sealed class IdpResolver(
     UpstreamIdpRegistry registry,
     IHttpClientFactory httpFactory,
     IOptions<IdpResolverOptions> options,
-    ILogger<IdpResolver> logger) : IIdpResolver
+    ILogger<IdpResolver> logger,
+    IResolverTokenProvider? tokenProvider = null) : IIdpResolver
 {
     public const string HttpClientName = "idp-resolver";
     private readonly IdpResolverOptions _opt = options.Value;
@@ -36,17 +37,36 @@ public sealed class IdpResolver(
             cts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, _opt.TimeoutSeconds)));
 
             var isGet = string.Equals(_opt.Method, "GET", StringComparison.OrdinalIgnoreCase);
-            using var request = isGet
-                ? new HttpRequestMessage(HttpMethod.Get, QueryHelpers.AddQueryString(_opt.Endpoint!, _opt.EmailParameter, email))
-                : new HttpRequestMessage(HttpMethod.Post, _opt.Endpoint!)
-                {
-                    Content = JsonContent.Create(new Dictionary<string, string> { [_opt.EmailParameter] = email })
-                };
-            if (!string.IsNullOrEmpty(_opt.ApiKey)) request.Headers.TryAddWithoutValidation(_opt.ApiKeyHeader, _opt.ApiKey);
-            request.Headers.Accept.ParseAdd("application/json");
-
             var http = httpFactory.CreateClient(HttpClientName);
-            using var response = await http.SendAsync(request, cts.Token);
+            var auth = _opt.Authentication;
+            var useBearer = auth.UsesBearerToken && tokenProvider is not null;
+
+            HttpRequestMessage Build(string? bearer)
+            {
+                var request = isGet
+                    ? new HttpRequestMessage(HttpMethod.Get, QueryHelpers.AddQueryString(_opt.Endpoint!, _opt.EmailParameter, email))
+                    : new HttpRequestMessage(HttpMethod.Post, _opt.Endpoint!)
+                    {
+                        Content = JsonContent.Create(new Dictionary<string, string> { [_opt.EmailParameter] = email })
+                    };
+                if (bearer is not null) request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bearer);
+                else if (auth.Mode is ResolverAuthMode.Auto or ResolverAuthMode.ApiKey && !string.IsNullOrEmpty(_opt.ApiKey))
+                    request.Headers.TryAddWithoutValidation(_opt.ApiKeyHeader, _opt.ApiKey);
+                request.Headers.Accept.ParseAdd("application/json");
+                return request;
+            }
+
+            var token = useBearer ? await tokenProvider!.GetTokenAsync(false, cts.Token) : null;
+            using var first = Build(token);
+            var response = await http.SendAsync(first, cts.Token);
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized && useBearer)
+            {
+                response.Dispose();
+                token = await tokenProvider!.GetTokenAsync(true, cts.Token);
+                using var retry = Build(token);
+                response = await http.SendAsync(retry, cts.Token);
+            }
+            using var _ = response;
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
             if (!response.IsSuccessStatusCode)
             {

@@ -8,13 +8,13 @@
   "UpstreamIdps": {
     "workforce": {
       "Type": "EntraWorkforce",
-      "DisplayName": "LEGO (Entra)",
+      "DisplayName": "Company (Entra)",
       "SortOrder": 10,
       "Enabled": true,
       "IsDefault": false,
-      "TenantId": "1d063515-6cad-4195-9486-ea65df456faa",
-      "ClientId": "67a4f291-ae17-4fe4-96de-278f8f1aa91c",
-      "EmailDomains": [ "lego.com", "consultant.lego.com" ],
+      "TenantId": "<tenant-id>",
+      "ClientId": "<client-id>",
+      "EmailDomains": [ "workforce.example","company.com" ],
       "UsePkce": true
     },
     "customers": {
@@ -23,9 +23,9 @@
       "SortOrder": 20,
       "Enabled": true,
       "IsDefault": true,
-      "TenantSubdomain": "legogroupextdev",
-      "TenantId": "dd24304a-ece6-4862-b054-36a24a7a4a65",
-      "ClientId": "5630d1e4-4748-45a9-8763-49a1f9a22845",
+      "TenantSubdomain": "<tenant-subdomain>",
+      "TenantId": "<tenant-id>",
+      "ClientId": "<client-id>",
       "EmailDomains": null,
       "UsePkce": true
     },

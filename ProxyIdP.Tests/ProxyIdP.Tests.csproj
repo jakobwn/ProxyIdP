@@ -21,7 +21,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ProxyIdP\ProxyIdP.csproj" />
-    <ProjectReference Include="..\ProxyIdP.SampleApp\ProxyIdP.SampleApp.csproj" />
+    <ProjectReference Include="..\local-development\ProxyIdP.SampleApp\ProxyIdP.SampleApp.csproj" />
+    <ProjectReference Include="..\local-development\ProxyIdP.ExamplePlugin\ProxyIdP.ExamplePlugin.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\ProxyIdP.Plugins.Abstractions\ProxyIdP.Plugins.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>
