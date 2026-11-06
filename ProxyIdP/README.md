@@ -1,5 +1,10 @@
 # ProxyIdP
 
+## Security and deployment
+
+- [Deployment best practices and pre-go-live checklist](../docs/DEPLOYMENT.md)
+- [Security review and hardening backlog](../docs/SECURITY-REVIEW.md)
+
 ## Upstream sign-in behavior
 
 - **login_hint**: when the user enters an email on the login page, that email is forwarded to the upstream IdP as `login_hint`, so it does not have to be typed twice. A `login_hint` sent by the client to `/connect/authorize` is used when no email was typed. Choosing an IdP button without an email sends no hint.
